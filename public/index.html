@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DSA ToS Tracker - Email Registration</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>DSA ToS Tracker</h1>
+            <p>Get notified when Very Large Online Platforms update their Terms of Service</p>
+        </header>
+        
+        <main>
+            <div class="info-box">
+                <h2>How it works</h2>
+                <p>This service monitors Terms of Service documents for Very Large Online Platforms (VLOPs) under the Digital Services Act.</p>
+                <p>When changes are detected, our system uses AI to summarize the changes and sends you a concise email notification.</p>
+                <p>This project is built on top of the <a href="https://code.europa.eu/dsa/terms-and-conditions-database/vlops-and-vloses/vlop-vlose-versions" target="_blank">Digital Services Terms and Conditions Database</a>.</p>
+            </div>
+
+            <div class="registration-form">
+                <h2>Register for Updates</h2>
+                <div id="message"></div>
+                <form id="email-form">
+                    <div class="form-group">
+                        <label for="email">Your Email:</label>
+                        <input type="email" id="email" name="email" required>
+                    </div>
+                    <button type="submit">Subscribe to Updates</button>
+                </form>
+            </div>
+        </main>
+
+        <footer>
+            <div class="footer-content">
+                <p>DSA ToS Tracker &copy; 2025 | A service for monitoring platform ToS with the Digital Services Act</p>
+                <div class="contact-info">
+                    <p>Contact: <a href="mailto:lukajurelars.bekavac@student.unisg.ch">lukajurelars.bekavac@student.unisg.ch</a></p>
+                </div>
+            </div>
+        </footer>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>

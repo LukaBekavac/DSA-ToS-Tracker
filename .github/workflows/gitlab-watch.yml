@@ -1,0 +1,121 @@
+name: Watch public GitLab repo
+on:
+  schedule:           # every five minutes
+    - cron: "*/5 * * * *"
+
+jobs:
+  diff:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write        # needed to update LAST_SHA
+    steps:
+    # 0) Checkout code to access subscriber list
+    - name: Checkout
+      uses: actions/checkout@v3
+
+    # 1) read the last processed commit (may be empty the first run)
+    - name: Load previous SHA
+      id: prev
+      run: |
+        echo "sha=$(gh variable get LAST_SHA -q .value || echo '')" >> $GITHUB_OUTPUT
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    # 2) ask GitLab for the newest commit on main
+    - name: Get HEAD from GitLab
+      id: head
+      run: |
+        owner="dsa/terms-and-conditions-database/vlops-and-vloses/vlop-vlose-versions"
+        head=$(curl -s "https://code.europa.eu/api/v4/projects/$(echo $owner | jq -sRr @uri)/repository/commits?ref_name=main&per_page=1" \
+               | jq -r '.[0].id')
+        echo "head=$head" >> $GITHUB_OUTPUT
+
+    # 3) exit early if no new commit
+    - name: Check for new work
+      if: steps.prev.outputs.sha == steps.head.outputs.head
+      run: echo "Nothing new – exiting."
+
+    # 4) pull a bounded diff (15 kB) between old and new
+    - name: Download diff
+      if: steps.prev.outputs.sha != steps.head.outputs.head
+      run: |
+        base=${{ steps.prev.outputs.sha }}
+        head=${{ steps.head.outputs.head }}
+        owner="dsa/terms-and-conditions-database/vlops-and-vloses/vlop-vlose-versions"
+        curl -s "https://code.europa.eu/api/v4/projects/$(echo $owner | jq -sRr @uri)/repository/compare?from=$base&to=$head" \
+             | jq -r '.diffs[].diff' | head -c 15000 > patch.txt
+        wc -c patch.txt
+
+    # 5) summarise with GPT-4o mini
+    - name: Summarise with GPT-4o
+      if: steps.prev.outputs.sha != steps.head.outputs.head
+      run: |
+        pip install --quiet openai==1.* sendgrid
+        python - <<'PY'
+import openai, os, textwrap
+openai.api_key = os.environ['OPENAI_API_KEY']
+patch = open('patch.txt').read()
+prompt = textwrap.dedent(f"""Summarize these git changes in bullet points:
+{patch}
+
+Please highlight if any of these changes affect data access. If they don't, explicitly state that these changes affect different things.
+Also place the changes in a systemic risk context if applicable.""")
+chat = openai.ChatCompletion.create(model='gpt-4o-mini',
+    messages=[{'role':'user','content':prompt}], temperature=0.3)
+with open('summary.txt','w') as f:
+    f.write(chat.choices[0].message.content)
+PY
+      env:
+        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+
+    # 6) Get subscriber list
+    - name: Setup Node.js
+      if: steps.prev.outputs.sha != steps.head.outputs.head
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+    
+    - name: Get all subscribers
+      if: steps.prev.outputs.sha != steps.head.outputs.head
+      id: subscribers
+      run: |
+        # Check if data/subscribers.json exists, create it if not
+        mkdir -p data
+        if [ ! -f data/subscribers.json ]; then
+          echo "[]" > data/subscribers.json
+        fi
+        
+        # Get subscribers and format for email
+        node -e "
+          const fs = require('fs');
+          const subscribers = JSON.parse(fs.readFileSync('data/subscribers.json', 'utf8'));
+          if (subscribers.length === 0) {
+            console.log('to_list=${{ secrets.MAIL_TO }}');
+          } else {
+            let emailList = subscribers.join(',');
+            // Add admin email if not already in the list
+            const adminEmail = '${{ secrets.MAIL_TO }}';
+            if (!subscribers.includes(adminEmail)) {
+              emailList = emailList ? emailList + ',' + adminEmail : adminEmail;
+            }
+            console.log('to_list=' + emailList);
+          }
+        " >> $GITHUB_OUTPUT
+
+    # 7) e-mail it to all subscribers
+    - name: Send e-mail to subscribers
+      if: steps.prev.outputs.sha != steps.head.outputs.head
+      uses: peter-evans/sendgrid-action@v1
+      with:
+        sendgrid_api_key: ${{ secrets.SENDGRID_API_KEY }}
+        from: ${{ secrets.MAIL_FROM }}
+        to: ${{ steps.subscribers.outputs.to_list }}
+        subject: "DSA ToS Update: GitLab push ${{ steps.head.outputs.head::7 }}"
+        body: "file://summary.txt"
+
+    # 8) remember the new SHA
+    - name: Persist latest SHA
+      if: steps.prev.outputs.sha != steps.head.outputs.head
+      run: gh variable set LAST_SHA -b "${{ steps.head.outputs.head }}"
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
