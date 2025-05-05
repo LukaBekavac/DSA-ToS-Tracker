@@ -50,7 +50,7 @@ jobs:
     - name: Summarise with GPT-4o
       if: steps.prev.outputs.sha != steps.head.outputs.head
       run: |
-        pip install --quiet openai==1.* sendgrid
+        pip install --quiet openai==1.*
         python - <<'PY'
 import openai, os, textwrap
 openai.api_key = os.environ['OPENAI_API_KEY']
@@ -102,16 +102,51 @@ PY
           }
         " >> $GITHUB_OUTPUT
 
-    # 7) e-mail it to all subscribers
+    # 7) e-mail it to all subscribers with Gmail
+    - name: Install nodemailer
+      if: steps.prev.outputs.sha != steps.head.outputs.head
+      run: npm install nodemailer
+      
     - name: Send e-mail to subscribers
       if: steps.prev.outputs.sha != steps.head.outputs.head
-      uses: peter-evans/sendgrid-action@v1
-      with:
-        sendgrid_api_key: ${{ secrets.SENDGRID_API_KEY }}
-        from: ${{ secrets.MAIL_FROM }}
-        to: ${{ steps.subscribers.outputs.to_list }}
-        subject: "DSA ToS Update: GitLab push ${{ steps.head.outputs.head::7 }}"
-        body: "file://summary.txt"
+      run: |
+        node -e "
+          const nodemailer = require('nodemailer');
+          const fs = require('fs');
+          
+          // Read summary content
+          const summary = fs.readFileSync('summary.txt', 'utf8');
+          
+          // Create transporter with Gmail
+          const transporter = nodemailer.createTransport({
+            service: 'gmail',
+            auth: {
+              user: process.env.GMAIL_USER,
+              pass: process.env.GMAIL_APP_PASSWORD
+            }
+          });
+          
+          // Email options
+          const mailOptions = {
+            from: process.env.GMAIL_USER,
+            to: '${{ steps.subscribers.outputs.to_list }}',
+            subject: 'DSA ToS Update: GitLab push ${{ steps.head.outputs.head::7 }}',
+            text: summary
+          };
+          
+          // Send email
+          transporter.sendMail(mailOptions, (error, info) => {
+            if (error) {
+              console.error('Error sending email:', error);
+              process.exit(1);
+            } else {
+              console.log('Email sent:', info.response);
+            }
+          });
+        "
+      env:
+        GMAIL_USER: ${{ secrets.GMAIL_USER }}
+        GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
 
     # 8) remember the new SHA
     - name: Persist latest SHA

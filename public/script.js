@@ -9,32 +9,34 @@ document.addEventListener('DOMContentLoaded', () => {
         
         try {
             // GitHub repository information - replace with your actual username
-            const owner = 'YOUR_GITHUB_USERNAME';
+            const owner = 'LukaBekavac';
             const repo = 'DSA-ToS-Tracker';
             
             // Create a serverless function URL that will handle the GitHub API auth
-            // You'll need to set this up (instructions below)
-            const functionUrl = 'YOUR_FUNCTION_URL';
+            const functionUrl = 'https://api.github.com/repos/LukaBekavac/DSA-ToS-Tracker/dispatches';
             
             // Submit email to your serverless function instead of directly to GitHub API
             const response = await fetch(functionUrl, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/vnd.github.v3+json',
+                    'Authorization': 'Bearer ' + document.getElementById('token').value
                 },
-                body: JSON.stringify({ email: email })
+                body: JSON.stringify({ 
+                    event_type: 'subscription_request',
+                    client_payload: { email: email }
+                })
             });
             
-            const data = await response.json();
-            
-            if (data.success) {
+            if (response.status === 204) {
                 messageDiv.className = 'success';
                 messageDiv.textContent = 'Success! You will now receive ToS update notifications.';
                 form.reset();
             } else {
                 // Show error message
                 messageDiv.className = 'error';
-                messageDiv.textContent = data.error || 'Failed to register. Please try again.';
+                messageDiv.textContent = 'Failed to register. Please try again.';
             }
         } catch (error) {
             // Show error message for network errors
