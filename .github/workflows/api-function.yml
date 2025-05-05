@@ -1,0 +1,61 @@
+name: API Function
+on:
+  api:
+    routes:
+      /subscribe:
+        post:
+          summary: Process subscription requests
+
+jobs:
+  handle-subscription:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        
+      - name: Process subscription
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+          script: |
+            const email = context.payload.body.email;
+            
+            // Simple validation
+            const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+            if (!emailRegex.test(email)) {
+              return {
+                status: 400,
+                body: JSON.stringify({
+                  success: false,
+                  error: 'Invalid email format'
+                })
+              };
+            }
+            
+            try {
+              // Trigger the repository dispatch event
+              await github.rest.repos.createDispatchEvent({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                event_type: 'subscription_request',
+                client_payload: { email: email }
+              });
+              
+              return {
+                status: 200,
+                body: JSON.stringify({
+                  success: true,
+                  message: 'Subscription request processed successfully'
+                })
+              };
+            } catch (error) {
+              return {
+                status: 500,
+                body: JSON.stringify({
+                  success: false,
+                  error: 'Failed to process subscription'
+                })
+              };
+            }

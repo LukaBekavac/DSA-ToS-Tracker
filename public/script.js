@@ -8,19 +8,26 @@ document.addEventListener('DOMContentLoaded', () => {
         const email = document.getElementById('email').value;
         
         try {
-            // Send the email to our API
-            const response = await fetch('/api/register', {
+            // GitHub repository information - replace with your actual username
+            const owner = 'YOUR_GITHUB_USERNAME';
+            const repo = 'DSA-ToS-Tracker';
+            
+            // Create a serverless function URL that will handle the GitHub API auth
+            // You'll need to set this up (instructions below)
+            const functionUrl = 'YOUR_FUNCTION_URL';
+            
+            // Submit email to your serverless function instead of directly to GitHub API
+            const response = await fetch(functionUrl, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ email })
+                body: JSON.stringify({ email: email })
             });
             
             const data = await response.json();
             
-            if (response.ok) {
-                // Show success message
+            if (data.success) {
                 messageDiv.className = 'success';
                 messageDiv.textContent = 'Success! You will now receive ToS update notifications.';
                 form.reset();

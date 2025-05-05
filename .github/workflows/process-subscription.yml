@@ -1,0 +1,56 @@
+name: Process Subscription Request
+on:
+  repository_dispatch:
+    types: [subscription_request]
+
+jobs:
+  add-subscriber:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          
+      - name: Ensure subscriber directory exists
+        run: |
+          mkdir -p data
+          if [ ! -f data/subscribers.json ]; then
+            echo "[]" > data/subscribers.json
+          fi
+      
+      - name: Add subscriber to list
+        run: |
+          EMAIL="${{ github.event.client_payload.email }}"
+          
+          # Simple validation
+          if [[ ! "$EMAIL" =~ ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$ ]]; then
+            echo "Invalid email format"
+            exit 1
+          fi
+          
+          node -e "
+            const fs = require('fs');
+            const subscribers = JSON.parse(fs.readFileSync('data/subscribers.json', 'utf8'));
+            
+            if (!subscribers.includes('${{ github.event.client_payload.email }}')) {
+              subscribers.push('${{ github.event.client_payload.email }}');
+              fs.writeFileSync('data/subscribers.json', JSON.stringify(subscribers, null, 2));
+              console.log('Subscriber added');
+            } else {
+              console.log('Subscriber already exists');
+            }
+          "
+          
+      - name: Commit and push changes
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add data/subscribers.json
+          git commit -m "Add subscriber: ${{ github.event.client_payload.email }}" || echo "No changes to commit"
+          git push
